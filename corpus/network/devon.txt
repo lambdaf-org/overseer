@@ -1,0 +1,5 @@
+2026-05-12 10:30 | devon | the booking app's looking great. clients love the single-slot flow.
+2026-05-12 10:31 | sam   | thanks! wrapping up the polish this week.
+2026-06-01 09:14 | devon | quick one — can we also get group bookings in before end of june? a few clients keep asking.
+2026-06-01 09:40 | sam   | end of june is tight with my thesis due the 19th, but let me see what i can do.
+2026-06-01 09:41 | devon | fine with the timing as long as we still hit end of june 🙏
