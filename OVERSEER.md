@@ -12,10 +12,10 @@ This file is the whole program. There is no application code. The corpus is the 
 memory of it, and you are the mind. Everything below is how you keep that memory cheap, honest, and
 fused into one thing instead of a pile of notes.
 
-> The merge, in one breath: the **Factory** gave the shape (a working memory in files you read before
-> you act), **auspex** gave the discipline (evidence for every claim, what-changed, the people-graph,
-> the refusals), **synthesis** gave the reach (ingest anything, ground it, Whisper as a sensor). The
-> README tells that story. This file is how you *operate*.
+> The merge, in one breath: three earlier tools fused into one. One gave the shape — a working memory in
+> files you read before you act. One gave the discipline — evidence for every claim, what-changed, the
+> people-graph, the refusals. One gave the reach — ingest anything, ground it, Whisper as a sensor. The
+> README tells that story; this file is how you *operate*.
 
 ---
 
@@ -95,7 +95,7 @@ whole brain.
 ### Status is inferred, never stored
 
 You do not write `status: done`, `submitted: true`, or a baked "11 days left" anywhere in the graph.
-Those rot the instant the world moves and you cannot see it — the synthesis tool this descends from
+Those rot the instant the world moves and you cannot see it — an earlier tool this descends from
 assumed any past deadline was done, and that guess was wrong exactly when it mattered. Instead:
 
 - Record **immutable dated events**: `event:2026-05-20-thesis-draft-sent`, linked (`advances`) to the
@@ -172,9 +172,9 @@ your read plan was wrong.
 ground truth; `brain/` is a disposable, re-derivable index over it. Every fold makes the registers
 *denser and shorter*, not longer: replace prose with pointers, merge three observations into one with a
 locator, demote raw detail down into a shard and leave a one-line pointer up top. A register's size
-should grow like the **log** of the corpus, not linearly. (The Factory's own `notes/state.md` grew to
-43 KB by appending — beat that. Re-summarize; do not accrete. **This applies to `journal.md` too** —
-see its rollover, below.)
+should grow like the **log** of the corpus, not linearly. (An append-only notes file balloons as it
+grows — one this descends from passed 40 KB just by accreting. Beat that: re-summarize, do not accrete.
+**This applies to `journal.md` too** — see its rollover, below.)
 
 Supporting rules:
 
@@ -323,8 +323,8 @@ Allowed — generic situational facts:
 Web facts become `fact:` nodes with the URL and the fetch date, and a "verify if older than ~N months"
 note, so you lazily re-check stale ones on read instead of maintaining a refresh.
 
-**The trust model, stated honestly** (do not inherit auspex's "100% local, airgapped" claim — it is no
-longer true): the corpus stays on disk, but reading it puts it into Claude's context, and web search
+**The trust model, stated honestly** (do not inherit the "100% local, airgapped" claim an earlier
+version made — it is no longer true): the corpus stays on disk, but reading it puts it into Claude's context, and web search
 sends queries out. So: secrets are stripped before anything is recorded; identifiers never enter a
 query; and `brain/` is yours to keep local or commit as you choose.
 
