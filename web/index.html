@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<!-- Overseer — the expression layer. Self-contained, offline, no CDN, no build step.
+     It RENDERS brain/ files verbatim, WRITES inbox/, and STREAMS `claude -p`. It computes
+     nothing: no scores, no ranking, no derived status. Deleting web/ loses nothing. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overseer</title>
+<style>
+  :root{
+    --bg:#0c0f14; --panel:#11161d; --panel2:#161c25; --line:#222b36;
+    --ink:#c9d4e0; --dim:#7d8a9a; --faint:#566173;
+    --accent:#4ec9b0;
+    --goal:#f0a35e; --proj:#6cb6ff; --person:#b083f0; --fact:#57ab5a;
+    --event:#8b97a6; --theme:#e5687f; --tension:#e5534b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  code,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.9em}
+
+  header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;
+    padding:12px 20px;background:linear-gradient(#0c0f14,#0c0f14ee);border-bottom:1px solid var(--line)}
+  header .logo{font-weight:650;letter-spacing:.3px}
+  header .logo b{color:var(--accent)}
+  header .sub{color:var(--faint);font-size:12.5px}
+  header .spacer{flex:1}
+  header button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px}
+  header button:hover{border-color:var(--accent);color:#fff}
+
+  main{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;
+    padding:20px;max-width:1180px;margin:0 auto;padding-bottom:150px}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  section h2.col{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;
+    color:var(--dim);margin:0 0 10px;font-weight:600}
+  .card-surface{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px}
+
+  /* rendered markdown */
+  .md h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent);
+    margin:18px 0 8px;font-weight:650}
+  .md h2:first-child{margin-top:0}
+  .md h3{font-size:15px;margin:14px 0 6px;color:#e7eef6}
+  .md p{margin:8px 0;color:var(--ink)}
+  .md ul{margin:6px 0 6px;padding-left:18px}
+  .md li{margin:4px 0}
+  .md strong{color:#fff;font-weight:640}
+  .md code{background:#0a0d12;border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:#a9e6d8}
+  .md em{color:var(--dim)}
+
+  /* node + shard chips */
+  .nref{color:#fff;text-decoration:none;border-bottom:1px dotted var(--faint);cursor:pointer;white-space:nowrap}
+  .nref:hover{border-bottom-color:var(--accent)}
+  .nref::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
+    margin-right:5px;vertical-align:middle;background:var(--dim)}
+  .nref.t-goal::before{background:var(--goal)} .nref.t-proj::before{background:var(--proj)}
+  .nref.t-person::before{background:var(--person)} .nref.t-fact::before{background:var(--fact)}
+  .nref.t-event::before{background:var(--event)} .nref.t-theme::before{background:var(--theme)}
+  .nref.t-shard::before{background:var(--accent);border-radius:1px}
+
+  /* feed */
+  #feed .entry{border-left:2px solid var(--line);padding:2px 0 2px 14px;margin:0 0 14px}
+  #feed .entry .date{color:var(--accent);font-size:12px;letter-spacing:.5px;font-weight:600}
+
+  /* slide-over */
+  #panel{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);z-index:30;
+    background:var(--panel2);border-left:1px solid var(--line);transform:translateX(102%);
+    transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:-20px 0 60px #0008}
+  #panel.open{transform:none}
+  #panel .phead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  #panel .phead .tag{font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:2px 8px;
+    border-radius:6px;background:#0a0d12;border:1px solid var(--line);color:var(--dim)}
+  #panel .phead .id{font-family:ui-monospace,monospace;font-size:13px;color:#fff}
+  #panel .phead .x{margin-left:auto;cursor:pointer;color:var(--dim);font-size:20px;line-height:1}
+  #panel .pbody{padding:16px 18px;overflow:auto;flex:1}
+  #panel .links a{display:inline-flex;margin:0 6px 6px 0}
+  #panel .pred{color:var(--faint);font-size:12px;margin-right:4px}
+  #stream{white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px;line-height:1.65;color:#d7e6df}
+  #stream.thinking{color:var(--dim);animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* action bar */
+  #bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#0c0f14f2;
+    border-top:1px solid var(--line);backdrop-filter:blur(6px)}
+  #bar .inner{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;gap:10px;align-items:flex-end}
+  #ask{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);
+    padding:11px 13px;font:inherit;resize:none;min-height:44px;max-height:140px}
+  #ask:focus{outline:none;border-color:var(--accent)}
+  #bar button{border-radius:10px;padding:0 16px;height:46px;cursor:pointer;border:1px solid var(--line);
+    background:var(--panel2);color:var(--ink);font-size:13.5px;white-space:nowrap}
+  #bar button.primary{background:var(--accent);color:#06231e;border-color:var(--accent);font-weight:640}
+  #bar button:hover{filter:brightness(1.08)}
+  #bar .drop{font-size:12px;color:var(--faint);cursor:pointer;border:1px dashed var(--line);
+    border-radius:10px;padding:0 12px;height:46px;display:flex;align-items:center}
+  #bar .drop.hot{border-color:var(--accent);color:var(--accent)}
+  .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:40;
+    background:var(--panel2);border:1px solid var(--accent);color:#fff;border-radius:9px;
+    padding:9px 16px;font-size:13px;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+
+  /* graph overlay */
+  #graphwrap{position:fixed;inset:0;z-index:25;background:#080a0ef2;display:none}
+  #graphwrap.open{display:block}
+  #graphwrap .gbar{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;
+    padding:12px 18px;color:var(--dim);font-size:13px}
+  #graphwrap .gbar button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:5px 11px;cursor:pointer;font-size:12.5px}
+  #graphwrap .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}
+  #graphwrap .legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;
+    margin-right:5px;vertical-align:middle}
+  canvas{display:block;width:100%;height:100%}
+  .hint{color:var(--faint);font-size:12.5px;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>overseer</b> · second brain</div>
+  <div class="sub" id="status">reading the brain…</div>
+  <div class="spacer"></div>
+  <button id="btnGraph">◉ graph</button>
+  <button id="btnRefresh">↻ refresh</button>
+</header>
+
+<main>
+  <section>
+    <h2 class="col">the second-you digest</h2>
+    <div id="digest" class="card-surface md">…</div>
+    <p class="hint">Everything here is written by the brain (brain/index.md), shown verbatim. Click any
+      <span class="nref">id</span> to open its card.</p>
+  </section>
+  <section>
+    <h2 class="col">what changed · the journal</h2>
+    <div id="feed" class="card-surface">…</div>
+  </section>
+</main>
+
+<!-- slide-over: shows a card, a shard, or a streamed answer -->
+<aside id="panel">
+  <div class="phead">
+    <span class="tag" id="pTag">card</span>
+    <span class="id" id="pId"></span>
+    <span class="x" id="pClose">×</span>
+  </div>
+  <div class="pbody" id="pBody"></div>
+</aside>
+
+<!-- action bar: ask · fold · focus · drop -->
+<div id="bar"><div class="inner">
+  <textarea id="ask" placeholder="ask your second brain…  (Enter to send, Shift+Enter for a newline)"></textarea>
+  <button id="btnSend" class="primary">ask</button>
+  <button id="btnFocus" title="standing-watch briefing">focus this week</button>
+  <button id="btnFold" title="ingest everything new in inbox/ and corpus/">fold</button>
+  <button class="drop" id="dropBtn" title="attach a file, or save typed text as a note">+ file</button>
+  <input id="file" type="file" hidden>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- graph overlay (secondary, opt-in) -->
+<div id="graphwrap">
+  <div class="gbar">
+    <strong style="color:#fff">the graph</strong>
+    <span class="legend">
+      <span style="color:var(--goal)">●goal</span><span style="color:var(--proj)">●project</span>
+      <span style="color:var(--person)">●person</span><span style="color:var(--fact)">●fact</span>
+      <span style="color:var(--event)">●event</span><span style="color:var(--theme)">●theme</span>
+      <span style="color:var(--tension)">— tension</span>
+    </span>
+    <span style="flex:1"></span>
+    <button id="gAll">show whole graph</button>
+    <button id="gClose">close</button>
+  </div>
+  <canvas id="canvas"></canvas>
+</div>
+
+<script>
+const CSRF = "__CSRF_TOKEN__";
+const $ = s => document.querySelector(s);
+const TYPES = ["goal","proj","person","fact","event","theme"];
+// styled distinctly only so tension reads at a glance; matches OVERSEER.md's tension/symmetric
+// predicates exactly (the predicate label is always shown verbatim — the UI invents nothing).
+const TENSION = new Set(["threatens","threatened-by","competes-with","overlaps","contradicts"]);
+
+/* ---------- tiny, escape-first markdown renderer (display only) ---------- */
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function linkify(s){
+  // any `type:slug` token -> clickable chip (works for new types too); shard:<id> opens the
+  // shard file; http(s): and bare dates are left alone.
+  return s.replace(/\b([a-z][a-z]*):([a-z0-9-]+)\b/g, (m,t)=>{
+    if(t==="http"||t==="https") return m;
+    return `<a class="nref t-${t}" data-ref="${m}">${m}</a>`;
+  });
+}
+function md(src){
+  src = src.replace(/<!--[\s\S]*?-->/g,"");           // drop file comments
+  // pass 1: coalesce wrapped lines. The brain wraps bullets and paragraphs across physical
+  // lines; a continuation joins the preceding bullet/paragraph instead of becoming its own.
+  const L=[];
+  for(const raw of src.split("\n")){
+    const line = raw.replace(/\s+$/,"");
+    if(/^##\s+/.test(line)){ L.push({t:"h2",s:line.replace(/^##\s+/,"")}); continue; }
+    if(/^###\s+/.test(line)){ L.push({t:"h3",s:line.replace(/^###\s+/,"")}); continue; }
+    if(/^\s*[-*]\s+/.test(line)){ L.push({t:"li",s:line.replace(/^\s*[-*]\s+/,"")}); continue; }
+    if(line.trim()===""){ L.push({t:"blank",s:""}); continue; }
+    const prev=L[L.length-1];
+    if(prev && (prev.t==="li"||prev.t==="p")){ prev.s += " " + line.trim(); continue; }
+    L.push({t:"p",s:line.trim()});
+  }
+  // pass 2: render
+  const out=[]; let inList=false;
+  const closeList=()=>{ if(inList){out.push("</ul>");inList=false;} };
+  for(const x of L){
+    if(x.t==="blank"){ closeList(); continue; }
+    if(x.t==="li"){ if(!inList){out.push("<ul>");inList=true;} out.push("<li>"+inline(x.s)+"</li>"); continue; }
+    closeList();
+    if(x.t==="h2") out.push("<h2>"+inline(x.s)+"</h2>");
+    else if(x.t==="h3") out.push("<h3>"+inline(x.s)+"</h3>");
+    else out.push("<p>"+inline(x.s)+"</p>");
+  }
+  closeList(); return out.join("\n");
+}
+function inline(s){
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g,(_,c)=>"<code>"+c+"</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = linkify(s);
+  return s;
+}
+
+/* ---------- api ---------- */
+const api = {
+  text:  p => fetch("/api/file?path="+encodeURIComponent(p)).then(r=>r.ok?r.text():Promise.reject(r.status)),
+  node:  id => fetch("/api/node/"+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)),
+  graph: (focus)=> fetch("/api/graph?focus="+encodeURIComponent(focus||"")+"&depth=2").then(r=>r.json()),
+  post:  (url,body)=> fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF},body:JSON.stringify(body)}),
+};
+
+/* ---------- dashboard ---------- */
+async function loadDashboard(){
+  try{
+    const idx = await api.text("index.md");
+    $("#digest").innerHTML = md(idx);
+    $("#status").textContent = "the brain, as it stands";
+  }catch(e){ $("#digest").innerHTML = "<p class='hint'>No brain/index.md yet — drop material below and press <b>fold</b>.</p>"; }
+  try{
+    const j = await api.text("journal.md");
+    renderFeed(j);
+  }catch(e){ $("#feed").innerHTML = "<p class='hint'>No journal yet.</p>"; }
+}
+function renderFeed(jraw){
+  const body = jraw.replace(/<!--[\s\S]*?-->/g,"");
+  // split into dated blocks, newest first
+  const blocks = body.split(/\n(?=##\s)/).map(b=>b.trim()).filter(b=>b.startsWith("##"));
+  blocks.reverse();
+  $("#feed").innerHTML = blocks.map(b=>{
+    const date = (b.match(/^##\s+(.*)/)||[])[1]||"";
+    const rest = b.replace(/^##\s+.*\n?/,"");
+    return `<div class="entry"><div class="date">${esc(date)}</div><div class="md">${md(rest)}</div></div>`;
+  }).join("") || "<p class='hint'>The journal is empty.</p>";
+}
+
+/* ---------- slide-over: cards / shards / answers ---------- */
+const panel=$("#panel");
+function openPanel(tag,id){ $("#pTag").textContent=tag; $("#pId").textContent=id||""; panel.classList.add("open"); }
+$("#pClose").onclick=()=>panel.classList.remove("open");
+
+// drop the links:/provenance:/aliases: keys from the raw card — they're shown once, structured, below
+function stripKeys(raw){
+  const out=[]; let inLinks=false;
+  for(const ln of raw.split("\n")){
+    if(/^links:\s*$/.test(ln)){ inLinks=true; continue; }
+    if(inLinks){ if(/^\s+-\s/.test(ln)) continue; else inLinks=false; }
+    if(/^(provenance|aliases):/i.test(ln)) continue;
+    out.push(ln);
+  }
+  return out.join("\n");
+}
+async function openCard(id){
+  if(id.startsWith("shard:")){ return openShard(id.slice(6)); }
+  openPanel(id.split(":")[0], id);
+  $("#pBody").innerHTML="<p class='hint'>opening…</p>";
+  try{
+    const c = await api.node(id);
+    let h = `<div class="md">${md(stripKeys(c.raw))}</div>`;
+    if(c.aliases.length) h += `<p class="hint">also known as: ${c.aliases.map(esc).join(", ")}</p>`;
+    if(c.links.length){
+      h += `<h2 class="col" style="margin-top:14px">links</h2><div class="links">`+
+        c.links.map(l=>`<span><span class="pred">${esc(l.pred)} →</span>`+
+          `<a class="nref t-${l.to.split(":")[0]}" data-ref="${l.to}">${l.to}</a></span>`).join(" ")+`</div>`;
+    }
+    if(c.provenance.length){
+      h += `<h2 class="col" style="margin-top:14px">provenance</h2>`+
+        c.provenance.map(p=>{
+          if(p.startsWith("shard:")) return `<div><a class="nref t-shard" data-ref="${p}">${p}</a></div>`;
+          if(p.startsWith("http")) return `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`;
+          return `<div class="hint mono">${esc(p)} <span style="color:var(--faint)">(raw source — open in your editor)</span></div>`;
+        }).join("");
+    }
+    $("#pBody").innerHTML=h;
+  }catch(e){ $("#pBody").innerHTML=`<p class='hint'>no card for <b>${esc(id)}</b> (${e}).</p>`; }
+}
+async function openShard(slug){
+  openPanel("shard","shard:"+slug);
+  try{ const t=await api.text("shards/"+slug+".md"); $("#pBody").innerHTML=`<div class="md">${md(t)}</div>`; }
+  catch(e){ $("#pBody").innerHTML=`<p class='hint'>no shard file (${e}).</p>`; }
+}
+
+// delegated clicks on any node/shard chip
+document.addEventListener("click",e=>{
+  const a=e.target.closest(".nref[data-ref]");
+  if(a){ e.preventDefault(); openCard(a.dataset.ref); }
+});
+
+/* ---------- run: fold / ask / focus (SSE from claude -p) ---------- */
+let running=false;
+async function run(mode,question){
+  if(running){ toast("a run is already in progress"); return; }
+  running=true;
+  openPanel(mode, mode==="ask" ? "" : mode);
+  const out=$("#pBody"); out.innerHTML=`<div id="stream" class="thinking"></div>`;
+  const stream=$("#stream"); let acc=""; let first=true;
+  const title = mode==="fold"?"folding new material…":mode==="focus"?"thinking about your week…":"thinking…";
+  stream.textContent=title+" ▍";
+  try{
+    const res=await fetch("/api/run",{method:"POST",
+      headers:{"Content-Type":"application/json","X-CSRF-Token":CSRF},
+      body:JSON.stringify({mode,question})});
+    if(res.status===409){ toast("a run is already in progress"); running=false; return; }
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
+    while(true){
+      const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let p; while((p=buf.indexOf("\n\n"))>=0){
+        const chunk=buf.slice(0,p); buf=buf.slice(p+2);
+        if(!chunk.startsWith("data:")) continue;
+        let ev; try{ ev=JSON.parse(chunk.slice(5).trim()); }catch{ continue; }
+        if(ev.type==="token"){
+          if(first){ stream.textContent=""; stream.classList.remove("thinking"); first=false; }
+          acc+=ev.text; stream.textContent=acc; stream.scrollIntoView({block:"end"});
+        }
+        else if(ev.type==="staged"){ stream.classList.remove("thinking"); acc+="\n["+ev.text+"]\n"; stream.textContent=acc; }
+        else if(ev.type==="error"){ stream.classList.remove("thinking"); acc+="\n⚠ "+ev.text+"\n"; stream.textContent=acc; }
+        else if(ev.type==="done"){ if(acc.trim()) out.innerHTML='<div class="md">'+md(acc)+'</div>'; }
+      }
+    }
+  }catch(e){ stream.textContent=acc+"\n⚠ connection error: "+e; }
+  running=false;
+  loadDashboard();   // the brain may have changed (fold appends; ask writes back)
+}
+
+/* ---------- capture: notes + file drop -> inbox/ ---------- */
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+$("#file").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(f.size>5*1024*1024){ toast("file too large (5MB max)"); return; }
+  const buf=await f.arrayBuffer();
+  const r=await fetch("/api/inbox",{method:"POST",
+    headers:{"Content-Type":"application/octet-stream","X-CSRF-Token":CSRF,
+             "X-Filename-Label":(f.name||"drop").replace(/[^a-z0-9-]+/gi,"-").slice(0,32)},
+    body:buf});
+  toast(r.ok?"added to inbox — press fold to ingest":"drop failed");
+  e.target.value="";
+};
+const drop=$("#dropBtn");
+// single-click control: empty ask box -> attach a file; typed text -> save it as a note.
+drop.onclick=async()=>{
+  const t=$("#ask").value.trim();
+  if(t){ const r=await api.post("/api/inbox",{text:t,label:"note"}); $("#ask").value=""; setDrop();
+         toast(r.ok?"note added to inbox — press fold to ingest":"failed"); }
+  else { $("#file").click(); }
+};
+function setDrop(){ drop.textContent = $("#ask").value.trim() ? "save note" : "+ file"; }
+["dragover","dragenter"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("hot");}));
+document.addEventListener("drop",async e=>{
+  e.preventDefault(); const f=e.dataTransfer.files[0]; if(!f) return;
+  $("#file").files=e.dataTransfer.files; $("#file").onchange({target:{files:[f],value:""}});
+});
+
+/* ---------- action bar wiring ---------- */
+const ask=$("#ask");
+function send(){
+  const q=ask.value.trim();
+  if(!q){ toast("type a question, or use a button"); return; }
+  ask.value=""; run("ask",q);
+}
+$("#btnSend").onclick=send;
+ask.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); }});
+ask.addEventListener("input",setDrop);   // toggles the drop button between "+ file" and "save note"
+$("#btnFold").onclick=()=>run("fold");
+$("#btnFocus").onclick=()=>run("focus");
+$("#btnRefresh").onclick=loadDashboard;
+
+/* ---------- the graph (secondary, opt-in) ---------- */
+const gwrap=$("#graphwrap"), canvas=$("#canvas"); let G=null, raf=null;
+$("#btnGraph").onclick=()=>openGraph("");
+$("#gClose").onclick=closeGraph;
+$("#gAll").onclick=()=>openGraph("all");
+function closeGraph(){ gwrap.classList.remove("open"); if(raf)cancelAnimationFrame(raf); raf=null; }
+async function openGraph(focus){
+  gwrap.classList.add("open"); sizeCanvas();
+  const data=await api.graph(focus);
+  if(data.capped){ const ctx=canvas.getContext("2d"); ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#7d8a9a"; ctx.font="15px sans-serif"; ctx.textAlign="center";
+    ctx.fillText("too big to draw ("+(data.count||"")+" nodes) — open a card and explore by links instead.",
+      canvas.clientWidth/2, canvas.clientHeight/2); return; }
+  layout(data); animate();
+}
+function sizeCanvas(){ const r=devicePixelRatio||1; canvas.width=innerWidth*r; canvas.height=innerHeight*r;
+  canvas.getContext("2d").setTransform(r,0,0,r,0,0); }
+addEventListener("resize",()=>{ if(gwrap.classList.contains("open")){ sizeCanvas(); } });
+const COL={goal:"#f0a35e",proj:"#6cb6ff",person:"#b083f0",fact:"#57ab5a",event:"#8b97a6",theme:"#e5687f"};
+function layout(data){
+  const W=innerWidth,H=innerHeight;
+  const nodes=data.nodes.map((n,i)=>({...n,x:W/2+Math.cos(i)*180+(i*53%200-100),
+    y:H/2+Math.sin(i*1.7)*180+(i*97%200-100),vx:0,vy:0}));
+  const idx=Object.fromEntries(nodes.map((n,i)=>[n.id,i]));
+  const edges=data.edges.filter(e=>idx[e.from]!=null&&idx[e.to]!=null);
+  G={nodes,edges,idx,drag:null};
+}
+function animate(){
+  const ctx=canvas.getContext("2d"), W=innerWidth, H=innerHeight;
+  const {nodes,edges,idx}=G;
+  // physics
+  for(const a of nodes){ a.fx=0; a.fy=0; }
+  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+    const a=nodes[i],b=nodes[j]; let dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy)||1;
+    const f=2600/(d*d); a.fx+=dx/d*f; a.fy+=dy/d*f; b.fx-=dx/d*f; b.fy-=dy/d*f;
+  }
+  for(const e of edges){ const a=nodes[idx[e.from]],b=nodes[idx[e.to]];
+    let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,f=(d-150)*0.015;
+    a.fx+=dx/d*f; a.fy+=dy/d*f; b.fx-=dx/d*f; b.fy-=dy/d*f; }
+  for(const a of nodes){ a.fx+=(W/2-a.x)*0.002; a.fy+=(H/2-a.y)*0.002;
+    if(a!==G.drag){ a.vx=(a.vx+a.fx)*0.82; a.vy=(a.vy+a.fy)*0.82; a.x+=a.vx; a.y+=a.vy; } }
+  // draw
+  ctx.clearRect(0,0,W,H);
+  for(const e of edges){ const a=nodes[idx[e.from]],b=nodes[idx[e.to]]; const tension=TENSION.has(e.pred);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=tension?"#e5534b":"#2c3744"; ctx.lineWidth=tension?1.6:1;
+    ctx.setLineDash(tension?[5,4]:[]); ctx.stroke(); ctx.setLineDash([]);
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; ctx.fillStyle=tension?"#e5534b":"#566173";
+    ctx.font="10px ui-monospace,monospace"; ctx.textAlign="center"; ctx.fillText(e.pred,mx,my-2); }
+  for(const n of nodes){ ctx.beginPath(); ctx.arc(n.x,n.y,8,0,7); ctx.fillStyle=COL[n.type]||"#8b97a6";
+    ctx.globalAlpha=n.missing?0.4:1; ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle="#c9d4e0"; ctx.font="12px ui-sans-serif"; ctx.textAlign="left"; ctx.fillText(n.id,n.x+12,n.y+4); }
+  raf=requestAnimationFrame(animate);
+}
+// graph interaction: click a node -> open its card; drag to reposition
+function pick(mx,my){ if(!G)return null; for(const n of G.nodes){ if(Math.hypot(n.x-mx,n.y-my)<12) return n; } return null; }
+let moved=false;
+canvas.addEventListener("mousedown",e=>{ const n=pick(e.clientX,e.clientY); if(n){ G.drag=n; moved=false; } });
+canvas.addEventListener("mousemove",e=>{ if(G&&G.drag){ moved=true; G.drag.x=e.clientX; G.drag.y=e.clientY; G.drag.vx=G.drag.vy=0; } });
+canvas.addEventListener("mouseup",()=>{ if(G) G.drag=null; });
+canvas.addEventListener("click",e=>{ if(moved){ moved=false; return; }  // a drag, not a click
+  const n=pick(e.clientX,e.clientY); if(n){ openCard(n.id); } });
+addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(gwrap.classList.contains("open"))closeGraph(); else panel.classList.remove("open"); }});
+
+/* ---------- go ---------- */
+loadDashboard();
+</script>
+</body>
+</html>

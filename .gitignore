@@ -1,0 +1,39 @@
+# brain/ IS versioned on purpose — git diff over brain/ is how Overseer knows what changed.
+# Do not ignore it.
+
+# Your raw corpus and inbox are private and can be huge; keep them out of git by default.
+# (The brain is a re-derivable index over them — losing brain/ is recoverable by re-folding;
+#  committing your whole life is not what you want.) Remove these lines if you want them tracked.
+corpus/**
+!corpus/
+!corpus/README.md
+!corpus/.gitkeep
+!corpus/*/
+!corpus/*/.gitkeep
+
+# This is the PUBLIC template, so the synthetic "Sam Rivera" seed is whitelisted below — it ships the
+# worked example end-to-end (raw corpus → shards → nodes → index/journal). Your own material stays
+# ignored: drop real files into corpus/ and they are never committed. For a private brain of your own,
+# keep this list as-is and just fold; nothing real leaks.
+!corpus/self/profile.md
+!corpus/work/thesis-brief.md
+!corpus/network/whoswho.md
+!corpus/network/mara.txt
+!corpus/network/devon.txt
+
+inbox/**
+!inbox/
+!inbox/README.md
+!inbox/.gitkeep
+
+# OS / tooling cruft.
+.DS_Store
+__pycache__/
+*.pyc
+
+# Never commit a stray secret even if one slips into the working tree.
+*.env
+.env
+*.pem
+*.key
+*_secret*
