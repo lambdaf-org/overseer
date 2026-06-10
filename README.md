@@ -1,78 +1,72 @@
 # Overseer
 
-> A second brain you reason *with*. Drop in what you know about yourself, the people around you, and a
-> huge body of work; it folds everything into one living graph — your roadmap and your network as one
-> thing — and answers like a counsellor who has read all of it and is on your side.
+> A second brain you reason *with*: drop in your life and work, and it folds everything into one graph, then answers like a counsellor who has read all of it.
 
-Most "second brain" tools are filing cabinets with search. They hand back the note you already wrote and
-leave the thinking to you. Overseer takes the opposite position: the notes are not the asset — the
-**edges between them are**. This goal is gated by that person's review, which collides with that
-deadline, which serves the same goal a third person could unblock. That web is where judgement lives, and
-a folder of notes throws it away the moment you file things into separate drawers.
+![Built on Claude Code](https://img.shields.io/badge/engine-Claude%20Code-8A2BE2)
+![Python](https://img.shields.io/badge/viewer-Python-3776AB)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-So there is **no application code**, and that is the design, not a missing feature. Overseer is plain
-files plus one protocol (`OVERSEER.md`); Claude Code is the engine that reads your corpus, builds the
-graph in `brain/`, and reasons over it. Nothing to deploy, no schema to migrate, no model grading its own
-homework. The corpus is the only source of truth; `brain/` is a small, re-derivable index over it, kept
-deliberately lossy so that one question never costs you your whole archive in tokens — the read scales
-with what you asked, not with how much you've stored.
+Overseer has **no application code**, and that is the design. It is plain files plus one protocol (`OVERSEER.md`), and Claude Code is the engine that reads your corpus, builds a graph in `brain/`, and reasons over it. Your notes are not the asset. The **edges between them are**: this goal is gated by that review, which collides with that deadline, which serves a goal a third person could unblock. That web is where judgement lives.
 
-Four things it won't compromise on, because they are where these tools usually cheat:
-
-- **It never stores status.** No `done: true`, no baked "11 days left" — those start lying the instant
-  the world moves and you can't see it. It records dated events and works out the state when you ask. If
-  nothing on record says you submitted, the honest answer is "I don't know — did you?"
-- **Every claim shows its receipt.** A statement about a person or the world carries a quote and a
-  pointer back to the source, or it doesn't get written down. No source, no claim.
-- **No number it can't defend by counting.** A model that scores its own output is a horoscope with a
-  JSON schema. It won't tell you a relationship is 0.71 healthy; it shows you what happened, with dates,
-  and lets you judge.
-- **It pushes back.** When what you say you want drifts from what your record actually shows, it says so.
-  A second brain that only agrees with you is a diary.
-
-It grew out of three earlier tools of mine — one that kept working memory in plain files, one that built
-the people-graph and the evidence discipline, one that could ingest anything and ground every claim (with
-Whisper as a sensor that just feeds raw capture in). This fuses the three into one, and adds what none of
-them had alone: a standing model of *you* that gets sharper, and stays small, as it grows.
-
-## Start
-
-Two ways in — the same brain underneath.
+## Quickstart
 
 ```bash
-# A) the webview — a dashboard you don't have to manage a terminal for:
-./launch.sh web                  # → open http://127.0.0.1:8787
-#   see the digest + journal, click through the graph, and ask / fold / focus / drop — all in one page.
+git clone https://github.com/lambdaf-org/overseer
+cd overseer
 
-# B) a Claude Code session in this folder — the raw engine:
+# A) the webview: a dashboard, no terminal to manage
+./launch.sh web                  # then open http://127.0.0.1:8787
+
+# B) a Claude Code session in this folder: the raw engine
 ./launch.sh                      # git-inits brain/, then tells you what to do
-# 1. put files in corpus/  (self/  network/  your usernames+who's who  work/  the big pile)
-# 2. for live capture, have any Whisper tool write `ts | speaker | text` lines into inbox/
-# 3. say:  "fold"        → it builds the brain
-#    then: ask it anything → it answers as your second brain
 ```
 
-Try the test the seed ships with: **"given everything, what should I focus on this week?"** Then replace
-the synthetic seed in `brain/` with your own life and ask it again.
+Then:
 
-The webview is the **expression layer** (`web/`): a thin local viewer + remote control that *shows* the
-brain, *writes* to `inbox/`, and *runs* headless Claude Code for you. It adds no intelligence — deleting
-`web/` loses nothing. See `web/README.md`.
+1. Put files in `corpus/` (`self/`, `network/`, `work/` are intake hints).
+2. For live capture, have any Whisper tool append `ts | speaker | text` lines into `inbox/`.
+3. Say **"fold"** to build the brain, then ask it anything.
+
+Ships with a synthetic seed. Try the acceptance test: **"given everything, what should I focus on this week?"** Then replace the seed in `brain/` with your own life and ask again.
+
+## Features
+
+- **One node space.** People, goals, projects, facts, events, and themes are all the same shape and live in one graph, so traversal crosses domains without switching modes.
+- **Status is inferred, never stored.** It records dated events and works out the current state when you ask. No record that you submitted means the honest answer is "I don't know, did you?"
+- **Every claim shows its receipt.** A statement about a person or the world carries a verbatim quote and a pointer to the source. No source, no claim.
+- **No number it cannot defend by counting.** It shows the tally with dates so you can recompute it, and skips self-scored confidence, urgency, and warmth values.
+- **It pushes back.** When what you say you want drifts from what your record shows, it says so, falsifiably, with the evidence.
+- **Cost scales with the question.** A read plan loads the compass and the few cards a question touches, walking tension edges to the conflict. It never reads `brain/` end to end.
+- **Lossy on purpose.** `corpus/` is the only ground truth; `brain/` is a small, re-derivable index over it, re-compressed each fold so a register grows like the log of the corpus.
+- **History for free.** `brain/` is under git, so "what changed since last week?" is `git log` over `brain/`.
+
+## How it works
+
+Two rituals run everything:
+
+- **FOLD** turns new material into brain. It reads `inbox/` and any `corpus/` source with no shard yet, strips secrets, summarizes each heavy source into a pointer-dense shard, mints nodes, and (the real work) links them with mirrored edges. It can enrich from the web with **generic** queries, then appends dated events to the journal and commits `brain/`.
+- **ASK** is the counsellor. It reads the index first, forms a read plan, traverses the touched subgraph, threads at least two families (your goals, the people, what it blocks, a fresh web fact), grounds every claim with a locator, and writes any decision back so advice compounds.
+
+The webview (`web/`) is the **expression layer**: a Python stdlib server with no build step that *shows* `brain/`, *writes* to `inbox/`, and *runs* headless `claude -p` for the ask / fold / focus / drop buttons. It adds no intelligence, and deleting `web/` loses nothing. See `web/README.md`.
 
 ## What's where
 
 ```
-OVERSEER.md   the operating manual — read it; it is the entire program
-brain/        your second self: index.md (router + digest) · nodes/ (one graph) · journal.md · shards/
-corpus/       your raw material, untouched (self/ network/ work/ are just intake hints)
-inbox/        new material to fold; the place Whisper drops transcripts
+OVERSEER.md   the operating manual; it is the entire program
+brain/        index.md (router + digest) · nodes/ (one graph) · journal.md · shards/
+corpus/       your raw material, untouched (self/ network/ work/ are intake hints)
+inbox/        new material to fold; where Whisper drops transcripts
+web/          the optional local viewer + remote control
 ```
 
-## Honest trust model
+## Trust model
 
-Your files stay on disk, but folding them puts them into Claude's context, and web enrichment sends
-*generic* queries out (never your names, handles, or secrets — see `OVERSEER.md`). This is not an
-airgapped tool; it is a private one that is careful about what leaves. Credentials are stripped before
-anything is recorded. `brain/` is yours to keep local or commit.
+Your files stay on disk, but folding puts them into Claude's context, and web enrichment sends *generic* queries out (never your names, handles, or secrets). This is a private tool that is careful about what leaves, and it is not airgapped. Credentials are stripped before anything is recorded. `brain/` is yours to keep local or commit. The webview binds `127.0.0.1`, checks the Host header, and requires a per-launch CSRF token for any action that changes state.
 
-MIT.
+## Contributing
+
+Lambdaforge is open source and contributions are welcome. Start with the [contributor guide](https://github.com/lambdaf-org/contributing), and see the org-wide [CONTRIBUTING](https://github.com/lambdaf-org/.github/blob/main/CONTRIBUTING.md) and [Code of Conduct](https://github.com/lambdaf-org/.github/blob/main/CODE_OF_CONDUCT.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
